@@ -4,11 +4,8 @@ import {
   MessageSquare, 
   LayoutDashboard, 
   Settings, 
-  Plus, 
-  MoreHorizontal,
   Send,
-  Loader2,
-  CheckCircle2
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from './lib/firebase';
@@ -74,7 +71,6 @@ const NavItem = ({ icon, label, active = false, onClick }: { icon: React.ReactNo
   <div onClick={onClick} className={`nav-item ${active ? 'active' : ''}`}>{icon}<span style={{ fontWeight: 500 }}>{label}</span></div>
 );
 
-// --- MODIFIED Chat Sidebar UI (WhatsApp Style) ---
 const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onClose: () => void }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
@@ -110,8 +106,7 @@ const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onCl
   return (
     <AnimatePresence>
       {customer && (
-        <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="chat-sidebar shadow-2xl">
-          {/* Header */}
+        <motion.div initial={{ x: '100vw' }} animate={{ x: 0 }} exit={{ x: '100vw' }} transition={{ type: 'spring', damping: 30, stiffness: 250 }} className="chat-sidebar shadow-2xl">
           <div className="chat-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div className="avatar-chat">{customer.name.charAt(0)}</div>
@@ -123,7 +118,6 @@ const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onCl
             <button onClick={onClose} className="close-btn">×</button>
           </div>
 
-          {/* Chat Body */}
           <div className="chat-body" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/580/650/HD-wallpaper-whatsapp-dark-mode-pattern-whatsapp-graphic-design-pattern-design.jpg")', backgroundSize: '400px', backgroundRepeat: 'repeat', opacity: 0.9 }}>
             {messages.map((m) => {
               const iso = m.interaction_type === 'agent_message';
@@ -139,7 +133,6 @@ const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onCl
             <div ref={chatEndRef} />
           </div>
 
-          {/* Footer / Input */}
           <div className="chat-footer">
             <input 
               className="chat-input" 
@@ -158,7 +151,6 @@ const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onCl
   );
 };
 
-// --- Kanban Components ---
 const KanbanColumn = ({ stage, customers, onSelect, onDrop }: { stage: Stage, customers: Customer[], onSelect: (c: Customer) => void, onDrop: (custId: string, stageId: string) => void }) => (
   <div className="kanban-column" onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e.dataTransfer.getData('customerId'), stage.id)}>
     <div className="column-header">
@@ -170,7 +162,14 @@ const KanbanColumn = ({ stage, customers, onSelect, onDrop }: { stage: Stage, cu
     </div>
     <div className="card-list">
       {customers.map(c => (
-        <motion.div key={c.id} className="customer-card" layoutId={c.id} draggable onDragStart={e => e.dataTransfer.setData('customerId', c.id)} onClick={() => onSelect(c)}>
+        <motion.div 
+          key={c.id} 
+          className="customer-card" 
+          layoutId={c.id} 
+          draggable 
+          onDragStartCapture={(e: React.DragEvent) => e.dataTransfer.setData('customerId', c.id)} 
+          onClick={() => onSelect(c)}
+        >
           <div className="card-title">{c.name}</div>
           <div className="card-text">{c.lastMessage || 'Sem mensagens recentes'}</div>
           <div className="card-meta">
@@ -183,7 +182,6 @@ const KanbanColumn = ({ stage, customers, onSelect, onDrop }: { stage: Stage, cu
   </div>
 );
 
-// --- Main App ---
 function App() {
   const [view, setView] = useState('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
