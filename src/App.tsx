@@ -3,12 +3,8 @@ import {
   MessageSquare, 
   LayoutDashboard, 
   Settings, 
-  Search,
-  Plus,
   Smile,
   Paperclip,
-  Mic,
-  MoreVertical,
   CheckCheck,
   Users,
   Send,
@@ -62,7 +58,7 @@ function App() {
     });
   }, []);
 
-  // Load Messages for active chat (REMOVED orderby to avoid Index requirement)
+  // Load Messages for active chat
   useEffect(() => {
     if (!activeChat) return;
     const q = query(
@@ -71,7 +67,6 @@ function App() {
       limit(100)
     );
     return onSnapshot(q, (sn) => {
-      // Manual local sort to avoid Firestore Index requirement
       const list = sn.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a: any, b: any) => {
         const t1 = a.created_at?.toMillis() || 0;
