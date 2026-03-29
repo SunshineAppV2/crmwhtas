@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   MessageSquare, 
@@ -8,11 +8,23 @@ import {
   MoreHorizontal,
   Phone,
   Mail,
-  MapPin,
   Calendar,
   DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { db } from './lib/firebase';
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  updateDoc, 
+  doc, 
+  addDoc,
+  serverTimestamp,
+  where,
+  limit
+} from 'firebase/firestore';
 
 // --- Types ---
 interface Stage {
@@ -29,7 +41,9 @@ interface Customer {
   time: string;
   ltv: number;
   tags: string[];
-  stageId: string;
+  stage_id: string;
+  whatsapp_id?: string;
+  email?: string;
 }
 
 // --- Constants ---
@@ -38,13 +52,6 @@ const STAGES: Stage[] = [
   { id: '2', name: 'Interesse', color: '#F59E0B' },
   { id: '3', name: 'Orçamento', color: '#8B5CF6' },
   { id: '4', name: 'Pedido Realizado', color: '#10B981' },
-];
-
-const INITIAL_CUSTOMERS: Customer[] = [
-  { id: 'c1', name: 'Renato Silva', lastMessage: 'Quero saber o valor do plano premium', time: '14:20', ltv: 0, tags: ['Instagram'], stageId: '1' },
-  { id: 'c2', name: 'Maria Oliveira', nickname: 'Maria Doces', lastMessage: 'Enviei o comprovante!', time: '11:45', ltv: 450, tags: ['Referência'], stageId: '1' },
-  { id: 'c3', name: 'Carlos Santos', lastMessage: 'O cep 04538-132 entrega?', time: '09:12', ltv: 0, tags: ['Google'], stageId: '2' },
-  { id: 'c4', name: 'Ana Paula', lastMessage: 'Qual o rastreio?', time: 'Ontem', ltv: 1200, tags: ['VIP'], stageId: '4' }
 ];
 
 // --- Components ---
@@ -148,12 +155,12 @@ const KanbanColumn = ({ stage, customers, onSelect, onDrop }: { stage: Stage, cu
           >
             <div className="card-title">{customer.name}</div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {customer.lastMessage}
+              {customer.lastMessage || 'Sem mensagens recentes'}
             </div>
             <div className="card-meta">
-              <span>{customer.time}</span>
+              <span>{customer.time || 'Novo'}</span>
               <span style={{ opacity: 0.3 }}>|</span>
-              <span className="badge-ltv">R$ {customer.ltv.toFixed(2)}</span>
+              <span className="badge-ltv">R$ {(customer.ltv || 0).toFixed(2)}</span>
             </div>
           </motion.div>
         ))}
@@ -165,52 +172,75 @@ const KanbanColumn = ({ stage, customers, onSelect, onDrop }: { stage: Stage, cu
   );
 };
 
-const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onClose: () => void }) => (
-  <AnimatePresence>
-    {customer && (
-      <motion.div 
-        initial={{ x: 400 }} 
-        animate={{ x: 0 }} 
-        exit={{ x: 400 }}
-        className="customer-sidebar glass-pane"
-      >
-        <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div className="avatar-large">{customer.name.charAt(0)}</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{customer.name}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{customer.nickname || 'Sem apelido'}</div>
+const CustomerDetail = ({ customer, onClose }: { customer: Customer | null, onClose: () => void }) => {
+  const [timeline, setTimeline] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!customer) return;
+    const q = query(
+      collection(db, 'interactions'), 
+      where('customer_id', '==', customer.id),
+      orderBy('created_at', 'desc'),
+      limit(5)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      setTimeline(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, [customer]);
+
+  return (
+    <AnimatePresence>
+      {customer && (
+        <motion.div 
+          initial={{ x: 400 }} 
+          animate={{ x: 0 }} 
+          exit={{ x: 400 }}
+          className="customer-sidebar glass-pane"
+        >
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="avatar-large">{customer.name.charAt(0)}</div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1.2rem', color: '#fff' }}>{customer.name}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{customer.nickname || 'WhatsApp User'}</div>
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--wa-green)', color: '#0B141A', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Mandar Mensagem</button>
+            <button style={{ padding: '10px', borderRadius: '8px', background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer' }}>
+              <MoreHorizontal color="var(--text-main)" size={18} />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <DetailItem icon={<Phone size={16} />} label="WhatsApp" value={customer.whatsapp_id || 'Não informado'} />
+            <DetailItem icon={<Mail size={16} />} label="E-mail" value={customer.email || 'Não informado'} />
+            <DetailItem icon={<DollarSign size={16} />} label="LTV Total" value={`R$ ${(customer.ltv || 0).toFixed(2)}`} highlight />
+          </div>
+
+          <div style={{ marginTop: 'auto', padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--wa-green)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
+              <MessageSquare size={14} /> Histórico Recente
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {timeline.length > 0 ? timeline.map(t => (
+                <div key={t.id} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px' }}>
+                   "{t.content}"
+                </div>
+              )) : (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem interações registradas.</div>
+              )}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--wa-green)', color: '#0B141A', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Mandar Mensagem</button>
-          <button style={{ padding: '10px', borderRadius: '8px', background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer' }}>
-            <MoreHorizontal color="var(--text-main)" size={18} />
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <DetailItem icon={<Phone size={16} />} label="WhatsApp" value="+55 11 99999-0000" />
-          <DetailItem icon={<Mail size={16} />} label="E-mail" value={customer.name.toLowerCase().replace(' ', '.') + '@gmail.com'} />
-          <DetailItem icon={<MapPin size={16} />} label="Endereço" value="Rua Faria Lima, 1200 - SP" />
-          <DetailItem icon={<DollarSign size={16} />} label="LTV Total" value={`R$ ${customer.ltv.toFixed(2)}`} highlight />
-        </div>
-
-        <div style={{ marginTop: 'auto', padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--wa-green)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
-            <Calendar size={14} /> Histórico de Notas
-          </div>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            "Cliente interessado nos novos produtos de verão. Aguardando catálogo."
-          </div>
-        </div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 const DetailItem = ({ icon, label, value, highlight = false }: { icon: React.ReactNode, label: string, value: string, highlight?: boolean }) => (
   <div className="form-group">
@@ -285,11 +315,35 @@ const SnippetsView = () => {
 
 function App() {
   const [view, setView] = useState('dashboard');
-  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
 
-  const moveCustomer = (custId: string, newStageId: string) => {
-    setCustomers(prev => prev.map(c => c.id === custId ? { ...c, stageId: newStageId } : c));
+  // --- Real-time Firestore Sync ---
+  useEffect(() => {
+    const q = query(collection(db, 'customers'), orderBy('created_at', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, []);
+
+  const moveCustomer = async (custId: string, newStageId: string) => {
+    try {
+      const customerDoc = doc(db, 'customers', custId);
+      await updateDoc(customerDoc, { 
+        stage_id: newStageId,
+        updated_at: serverTimestamp() 
+      });
+
+      // Record in Timeline
+      await addDoc(collection(db, 'interactions'), {
+        customer_id: custId,
+        interaction_type: 'change_status',
+        content: `Lead movido para etapa: ${STAGES.find(s => s.id === newStageId)?.name}`,
+        created_at: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Erro ao mover cliente:", error);
+    }
   };
 
   return (
@@ -302,7 +356,7 @@ function App() {
             <KanbanColumn 
               key={stage.id} 
               stage={stage} 
-              customers={customers.filter(c => c.stageId === stage.id)} 
+              customers={customers.filter(c => c.stage_id === stage.id)} 
               onSelect={setSelectedCustomer}
               onDrop={moveCustomer}
             />
