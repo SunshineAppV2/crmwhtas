@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, 
   LayoutDashboard, 
@@ -17,12 +17,8 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  doc, 
-  addDoc,
-  serverTimestamp,
-  where,
-  limit,
-  updateDoc
+  where, 
+  limit
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -92,7 +88,7 @@ function App() {
       <nav className="icon-sidebar">
         <div className="sidebar-icon active"><MessageSquare size={24} /></div>
         <div className="sidebar-icon"><LayoutDashboard size={24} /></div>
-        <div className="sidebar-icon"><Users size={24} /></div>
+        <div className="sidebar-icon"><UsersIcon size={24} /></div>
         <div className="sidebar-icon"><Settings size={24} style={{ marginTop: 'auto' }} /></div>
       </nav>
 
@@ -117,7 +113,7 @@ function App() {
         <div style={{ padding: '8px 16px', display: 'flex', gap: '8px', overflowX: 'auto' }}>
            <span className="badge" style={{ background: 'rgba(0,168,132,0.1)', color: 'var(--wa-green)' }}>Tudo</span>
            <span className="badge" style={{ background: '#F0F2F5', color: 'var(--wa-text-secondary)' }}>Não lidas</span>
-           <span className="badge" style={{ background: '#F0F2F5', color: 'var(--wa-text-secondary)' }}>Contatos</span>
+           <span className="badge" style={{ background: '#F0F2F5', color: 'var(--wa-text-secondary)' }}>Favoritas</span>
         </div>
 
         <div className="chat-list">
@@ -187,10 +183,10 @@ function App() {
             </footer>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--wa-text-secondary)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--wa-text-secondary)', zIndex: 10 }}>
              <MessageSquare size={64} style={{ opacity: 0.1, marginBottom: '20px' }} />
-             <div style={{ fontSize: '2rem', fontWeight: 300 }}>Seu WhatsApp Web</div>
-             <p>Envie e receba mensagens sem precisar manter seu celular conectado ao CRM.</p>
+             <div style={{ fontSize: '2rem', fontWeight: 300 }}>WhatsApp para Empresas</div>
+             <p>Selecione um contato para começar a conversar.</p>
           </div>
         )}
       </main>
@@ -198,7 +194,7 @@ function App() {
   );
 }
 
-const Users = ({ size, color, style }: any) => (
+const UsersIcon = ({ size, style }: any) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
   </svg>
