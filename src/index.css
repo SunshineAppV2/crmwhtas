@@ -1,0 +1,218 @@
+/* 
+ * CSS Design System: WhatsApp CRM Premium
+ * Focus: Glassmorphism, Modern Typography, Vibrant Borders
+ */
+
+:root {
+  --wa-green: #25d366;
+  --wa-green-dark: #075e54;
+  --blue-active: #53bdeb;
+  --bg-main: #0b141a;
+  --surface-1: #111b21;
+  --surface-2: #202c33;
+  --text-main: #e9edef;
+  --text-muted: #8696a0;
+  --border: rgba(255, 255, 255, 0.08);
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.crm-app {
+  display: grid;
+  grid-template-columns: 280px 1fr 350px; /* Sidebar | Kanban | Customer Info */
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Glass Card Utility */
+.glass-pane {
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-premium);
+}
+
+/* Kanban Structure */
+.kanban-board {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  overflow-x: auto;
+  align-items: flex-start;
+  scroll-behavior: smooth;
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(37, 211, 102, 0.05) 0%, transparent 100%),
+    linear-gradient(rgba(11, 20, 26, 0.8), rgba(11, 20, 26, 0.8));
+}
+
+.kanban-column {
+  min-width: 320px;
+  max-width: 320px;
+  background: var(--surface-1);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.column-header {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.column-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.card-list {
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Premium CRM Cards */
+.customer-card {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border: 1px solid var(--border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: grab;
+  position: relative;
+  overflow: hidden;
+}
+
+.customer-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--wa-green);
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.1);
+}
+
+.customer-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--wa-green);
+  opacity: 0.7;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.card-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.badge-ltv {
+  color: var(--wa-green);
+  background: rgba(37, 211, 102, 0.1);
+}
+
+/* Right Sidebar: Customer Detail */
+.customer-sidebar {
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 24px;
+}
+
+.sidebar-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+.avatar-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--wa-green-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+/* Forms & Inputs */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--wa-green);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeIn 0.4s forwards;
+}
