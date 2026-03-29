@@ -3,6 +3,8 @@ import {
   MessageSquare, 
   LayoutDashboard, 
   Settings, 
+  Search,
+  Plus,
   Smile,
   Paperclip,
   Mic,
@@ -10,7 +12,8 @@ import {
   CheckCheck,
   Users,
   Send,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { 
@@ -20,9 +23,7 @@ import {
   orderBy, 
   doc, 
   updateDoc, 
-  addDoc,
-  serverTimestamp,
-  where,
+  where, 
   limit
 } from 'firebase/firestore';
 
@@ -35,7 +36,6 @@ interface Customer {
   lastMessage?: string;
   stage_id: string;
   ltv: number;
-  unread_count?: number;
 }
 
 const STAGES: Stage[] = [
@@ -51,55 +51,61 @@ function App() {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load Customers
   useEffect(() => {
-    const q = query(collection(db, 'customers'), orderBy('updated_at', 'desc'));
+    const q = query(collection(db, 'customers'), orderBy('created_at', 'desc'));
     return onSnapshot(q, (sn) => {
       setCustomers(sn.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
   }, []);
 
-  // Load Messages for active chat
+  // Load Messages for active chat (REMOVED orderby to avoid Index requirement)
   useEffect(() => {
     if (!activeChat) return;
     const q = query(
       collection(db, 'interactions'), 
-      where('customer_id', '==', activeChat.id), 
-      orderBy('created_at', 'asc'),
-      limit(50)
+      where('customer_id', '==', activeChat.id),
+      limit(100)
     );
     return onSnapshot(q, (sn) => {
-      setMessages(sn.docs.map(d => ({ id: d.id, ...d.data() })));
+      // Manual local sort to avoid Firestore Index requirement
+      const list = sn.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a: any, b: any) => {
+        const t1 = a.created_at?.toMillis() || 0;
+        const t2 = b.created_at?.toMillis() || 0;
+        return t1 - t2;
+      });
+      setMessages(list);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
   }, [activeChat]);
 
-  const selectChat = async (cust: Customer) => {
-    setActiveChat(cust);
-    if (cust.unread_count && cust.unread_count > 0) {
-      await updateDoc(doc(db, 'customers', cust.id), { unread_count: 0 });
-    }
-  };
-
   const moveCustomer = async (custId: string, newStageId: string) => {
     const customerRef = doc(db, 'customers', custId);
-    await updateDoc(customerRef, { stage_id: newStageId, updated_at: serverTimestamp() });
+    await updateDoc(customerRef, { stage_id: newStageId });
   };
 
   const handleSend = async () => {
     if (!inputText.trim() || !activeChat || sending) return;
     setSending(true);
+    setErrorStatus(null);
     try {
-      await fetch('/api/send-message', {
+      const response = await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: activeChat.whatsapp_id, text: inputText, customerId: activeChat.id })
       });
-      setInputText('');
-    } catch (e) {
-      console.error(e);
+      const data = await response.json();
+      if (!response.ok) {
+        setErrorStatus(data.details?.message || data.error || 'Falha ao enviar');
+      } else {
+        setInputText('');
+      }
+    } catch (e: any) {
+      setErrorStatus(e.message || 'Erro de conexão');
     } finally {
       setSending(false);
     }
@@ -107,7 +113,6 @@ function App() {
 
   return (
     <div className="crm-app">
-      {/* 1. Icon Sidebar */}
       <nav className="icon-sidebar">
         <div className="sidebar-icon active"><MessageSquare size={24} /></div>
         <div className="sidebar-icon"><LayoutDashboard size={24} /></div>
@@ -115,7 +120,6 @@ function App() {
         <div className="sidebar-icon" style={{ marginTop: 'auto' }}><Settings size={24} /></div>
       </nav>
 
-      {/* 2. Chat-Kanban Area */}
       <main style={{ flex: 1, display: 'flex', overflowX: 'auto', background: '#F0F2F5', padding: '16px', gap: '8px' }}>
         {STAGES.map(stage => (
           <div 
@@ -136,20 +140,15 @@ function App() {
                   className={`chat-item-card ${activeChat?.id === c.id ? 'active' : ''}`}
                   draggable
                   onDragStartCapture={e => e.dataTransfer.setData('customerId', c.id)}
-                  onClick={() => selectChat(c)}
+                  onClick={() => { setActiveChat(c); setErrorStatus(null); }}
                 >
                   <div className="avatar-wa">{c.name.charAt(0)}</div>
                   <div className="chat-content-wa">
                     <div className="chat-row-wa">
                       <span className="chat-name-wa">{c.name}</span>
-                      <span className="chat-time-wa">11:34</span>
+                      <span className="chat-time-wa">Agora</span>
                     </div>
-                    <div className="chat-msg-row">
-                      <div className="chat-msg-wa">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
-                      {c.unread_count && c.unread_count > 0 ? (
-                        <div className="wa-unread-badge">{c.unread_count}</div>
-                      ) : null}
-                    </div>
+                    <div className="chat-msg-wa">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
                   </div>
                 </div>
               ))}
@@ -158,7 +157,6 @@ function App() {
         ))}
       </main>
 
-      {/* 3. Floating Chat Window */}
       {activeChat && (
         <aside className="floating-chat-window shadow-left">
           <header className="window-header-wa">
@@ -166,20 +164,17 @@ function App() {
                <div className="avatar-wa" style={{ width: '40px', height: '40px' }}>{activeChat.name.charAt(0)}</div>
                <div>
                   <div style={{ fontWeight: 600 }}>{activeChat.name}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--wa-green-dark)' }}>Sincronizado via Whats</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--wa-text-secondary)' }}>online</div>
                </div>
             </div>
             <button onClick={() => setActiveChat(null)} className="close-chat-btn">×</button>
           </header>
 
           <div className="chat-messages-wa">
-             {messages.map((m, idx) => {
+             {messages.map((m) => {
                const isMe = m.interaction_type === 'agent_message';
-               const showDate = idx === 0;
                return (
-                 <div key={m.id}>
-                   {showDate && <div className="chat-date"><span>HOJE</span></div>}
-                   <div className={`msg-wrap-wa ${isMe ? 'sent' : 'received'}`}>
+                 <div key={m.id} className={`msg-wrap-wa ${isMe ? 'sent' : 'received'}`}>
                     <div className={`msg-bubble-wa ${isMe ? 'sent' : 'received'}`}>
                        {m.content}
                        <span className="msg-time-wa">
@@ -187,12 +182,17 @@ function App() {
                          {isMe && <CheckCheck size={14} color="#53BDEB" style={{ marginLeft: '4px' }} />}
                        </span>
                     </div>
-                   </div>
                  </div>
                );
              })}
              <div ref={chatEndRef} />
           </div>
+          
+          {errorStatus && (
+            <div style={{ background: '#FDECEC', color: '#E53E3E', padding: '8px 16px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+               <AlertCircle size={14} /> {errorStatus}
+            </div>
+          )}
 
           <footer className="chat-footer-wa">
              <Smile className="wa-icon" />
@@ -204,7 +204,7 @@ function App() {
                onChange={e => setInputText(e.target.value)}
                onKeyDown={e => e.key === 'Enter' && handleSend()}
              />
-             <button className="send-wa-btn" onClick={handleSend}>
+             <button className="send-wa-btn" onClick={handleSend} disabled={sending}>
                 {sending ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
              </button>
           </footer>
