@@ -9,7 +9,10 @@ import {
   Paperclip,
   Mic,
   MoreVertical,
-  CheckCheck
+  CheckCheck,
+  Users,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { 
@@ -17,11 +20,16 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  where, 
+  doc, 
+  updateDoc, 
+  addDoc,
+  serverTimestamp,
+  where,
   limit
 } from 'firebase/firestore';
 
 // --- Types ---
+interface Stage { id: string; name: string; color: string; }
 interface Customer {
   id: string;
   name: string;
@@ -31,173 +39,170 @@ interface Customer {
   ltv: number;
 }
 
-// --- Main App ---
+const STAGES: Stage[] = [
+  { id: '1', name: 'Primeiro Contato', color: '#3B82F6' },
+  { id: '2', name: 'Interesse', color: '#F59E0B' },
+  { id: '3', name: 'Orçamento', color: '#8B5CF6' },
+  { id: '4', name: 'Pedido Realizado', color: '#10B981' },
+];
+
 function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeChat, setActiveChat] = useState<Customer | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Load Customers (Chats)
+  // Load Customers
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('created_at', 'desc'));
     return onSnapshot(q, (sn) => {
-      const list = sn.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
-      setCustomers(list);
+      setCustomers(sn.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
   }, []);
 
-  // Load Active Chat Messages
+  // Load Messages for active chat
   useEffect(() => {
     if (!activeChat) return;
+    // We order by timestamp, but the query should be resilient to missing timestamps during write
     const q = query(
       collection(db, 'interactions'), 
       where('customer_id', '==', activeChat.id), 
-      orderBy('created_at', 'asc'), 
+      orderBy('created_at', 'asc'),
       limit(50)
     );
     return onSnapshot(q, (sn) => {
       setMessages(sn.docs.map(d => ({ id: d.id, ...d.data() })));
+      // Scroll to bottom
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
   }, [activeChat]);
 
+  const moveCustomer = async (custId: string, newStageId: string) => {
+    const customerRef = doc(db, 'customers', custId);
+    await updateDoc(customerRef, { stage_id: newStageId, updated_at: serverTimestamp() });
+  };
+
   const handleSend = async () => {
-    if (!inputText.trim() || !activeChat) return;
-    const text = inputText;
-    setInputText('');
+    if (!inputText.trim() || !activeChat || sending) return;
+    setSending(true);
     try {
       await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          to: activeChat.whatsapp_id, 
-          text: text, 
-          customerId: activeChat.id 
-        })
+        body: JSON.stringify({ to: activeChat.whatsapp_id, text: inputText, customerId: activeChat.id })
       });
+      setInputText('');
     } catch (e) {
-      console.error('Error sending:', e);
+      console.error(e);
+    } finally {
+      setSending(false);
     }
   };
 
   return (
     <div className="crm-app">
-      {/* 1. Left Icon Nav - Narrow Sidebar */}
+      {/* 1. Icon Sidebar (Fiel ao print) */}
       <nav className="icon-sidebar">
         <div className="sidebar-icon active"><MessageSquare size={24} /></div>
         <div className="sidebar-icon"><LayoutDashboard size={24} /></div>
-        <div className="sidebar-icon"><UsersIcon size={24} /></div>
-        <div className="sidebar-icon"><Settings size={24} style={{ marginTop: 'auto' }} /></div>
+        <div className="sidebar-icon"><Users size={24} /></div>
+        <div className="sidebar-icon" style={{ marginTop: 'auto' }}><Settings size={24} /></div>
       </nav>
 
-      {/* 2. Middle Chat List - Sidebar */}
-      <aside className="chat-list-container">
-        <header className="list-header">
-          <h2 style={{ fontSize: '1.4rem', margin: 0, fontWeight: 700 }}>WhatsApp</h2>
-          <div style={{ display: 'flex', gap: '16px', color: 'var(--wa-icon-gray)' }}>
-             <Plus size={20} style={{ cursor: 'pointer' }} />
-             <MoreVertical size={20} style={{ cursor: 'pointer' }} />
-          </div>
-        </header>
+      {/* 2. Chat-Kanban Area (As 4 colunas baseadas no print) */}
+      <main style={{ flex: 1, display: 'flex', overflowX: 'auto', background: '#F0F2F5', padding: '16px', gap: '8px' }}>
+        {STAGES.map(stage => (
+          <div 
+            key={stage.id} 
+            className="kanban-chat-column"
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => moveCustomer(e.dataTransfer.getData('customerId'), stage.id)}
+          >
+            <div className="column-header-wa">
+              <span style={{ color: stage.color, fontWeight: 'bold' }}>{stage.name.toUpperCase()}</span>
+              <span className="badge-wa">{customers.filter(c => c.stage_id === stage.id).length}</span>
+            </div>
 
-        <div className="search-container">
-           <div className="search-box">
-              <Search size={16} color="var(--wa-text-secondary)" />
-              <input className="search-input" placeholder="Pesquisar ou começar uma nova conversa" />
-           </div>
-        </div>
-
-        {/* Filters Like In The Screenshot */}
-        <div style={{ padding: '8px 16px', display: 'flex', gap: '8px', overflowX: 'auto' }}>
-           <span className="badge" style={{ background: 'rgba(0,168,132,0.1)', color: 'var(--wa-green)' }}>Tudo</span>
-           <span className="badge" style={{ background: '#F0F2F5', color: 'var(--wa-text-secondary)' }}>Não lidas</span>
-           <span className="badge" style={{ background: '#F0F2F5', color: 'var(--wa-text-secondary)' }}>Favoritas</span>
-        </div>
-
-        <div className="chat-list">
-          {customers.map(c => (
-            <div 
-              key={c.id} 
-              className={`chat-item ${activeChat?.id === c.id ? 'active' : ''}`}
-              onClick={() => setActiveChat(c)}
-            >
-              <div className="avatar-large">{c.name.charAt(0)}</div>
-              <div className="chat-info">
-                <div className="chat-meta">
-                  <span className="chat-name">{c.name}</span>
-                  <span className="chat-time">11:34</span>
+            <div className="chat-item-list">
+              {customers.filter(c => c.stage_id === stage.id).map(c => (
+                <div 
+                  key={c.id} 
+                  className={`chat-item-card ${activeChat?.id === c.id ? 'active' : ''}`}
+                  draggable
+                  onDragStartCapture={e => e.dataTransfer.setData('customerId', c.id)}
+                  onClick={() => setActiveChat(c)}
+                >
+                  <div className="avatar-wa">{c.name.charAt(0)}</div>
+                  <div className="chat-content-wa">
+                    <div className="chat-row-wa">
+                      <span className="chat-name-wa">{c.name}</span>
+                      <span className="chat-time-wa">11:34</span>
+                    </div>
+                    <div className="chat-msg-wa">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
+                  </div>
                 </div>
-                <div className="chat-last-msg">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </aside>
-
-      {/* 3. Main Chat Window - Area */}
-      <main className="chat-window">
-        {activeChat ? (
-          <>
-            <header className="window-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                 <div className="avatar-large" style={{ width: '40px', height: '40px' }}>{activeChat.name.charAt(0)}</div>
-                 <div>
-                    <div style={{ fontWeight: 500 }}>{activeChat.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--wa-text-secondary)' }}>clique aqui para dados do contato</div>
-                 </div>
-              </div>
-              <MoreVertical size={20} color="var(--wa-icon-gray)" />
-            </header>
-
-            <div className="chat-messages">
-               {messages.map(m => {
-                 const isMe = m.interaction_type === 'agent_message';
-                 return (
-                   <div key={m.id} className={`msg-bubble-wrap ${isMe ? 'sent' : 'received'}`}>
-                      <div className={`msg-bubble ${isMe ? 'sent' : 'received'}`}>
-                         {m.content}
-                         <span className="bubble-time">
-                           {m.created_at?.toDate() ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(m.created_at.toDate()) : '--:--'}
-                           {isMe && <CheckCheck size={14} color="#53BDEB" style={{ marginLeft: '4px', position: 'relative', top: '2px' }} />}
-                         </span>
-                      </div>
-                   </div>
-                 );
-               })}
-               <div ref={chatEndRef} />
-            </div>
-
-            <footer className="chat-input-bar">
-               <Smile className="action-btn" />
-               <Paperclip className="action-btn" />
-               <input 
-                 className="input-field" 
-                 placeholder="Digite uma mensagem" 
-                 value={inputText}
-                 onChange={(e) => setInputText(e.target.value)}
-                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-               />
-               <Mic className="action-btn" />
-            </footer>
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--wa-text-secondary)', zIndex: 10 }}>
-             <MessageSquare size={64} style={{ opacity: 0.1, marginBottom: '20px' }} />
-             <div style={{ fontSize: '2rem', fontWeight: 300 }}>WhatsApp para Empresas</div>
-             <p>Selecione um contato para começar a conversar.</p>
           </div>
-        )}
+        ))}
       </main>
+
+      {/* 3. Floating Chat Window (Quando um card é selecionado) */}
+      {activeChat && (
+        <aside className="floating-chat-window shadow-left">
+          <header className="window-header-wa">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+               <div className="avatar-wa" style={{ width: '40px', height: '40px' }}>{activeChat.name.charAt(0)}</div>
+               <div>
+                  <div style={{ fontWeight: 600 }}>{activeChat.name}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--wa-text-secondary)' }}>visto recentemente às 11:34</div>
+               </div>
+            </div>
+            <button onClick={() => setActiveChat(null)} className="close-chat-btn">×</button>
+          </header>
+
+          <div className="chat-messages-wa">
+             {messages.map((m, idx) => {
+               const isMe = m.interaction_type === 'agent_message';
+               const showDate = idx === 0; // Simple date logic
+               return (
+                 <div key={m.id}>
+                   {showDate && <div className="chat-date"><span>HOJE</span></div>}
+                   <div className={`msg-wrap-wa ${isMe ? 'sent' : 'received'}`}>
+                    <div className={`msg-bubble-wa ${isMe ? 'sent' : 'received'}`}>
+                       {m.content}
+                       <span className="msg-time-wa">
+                         {m.created_at?.toDate() ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(m.created_at.toDate()) : '--:--'}
+                         {isMe && <CheckCheck size={14} color="#53BDEB" style={{ marginLeft: '4px' }} />}
+                       </span>
+                    </div>
+                   </div>
+                 </div>
+               );
+             })}
+             <div ref={chatEndRef} />
+          </div>
+
+          <footer className="chat-footer-wa">
+             <Smile className="wa-icon" />
+             <Paperclip className="wa-icon" />
+             <input 
+               className="wa-input" 
+               placeholder="Digite uma mensagem" 
+               value={inputText}
+               onChange={e => setInputText(e.target.value)}
+               onKeyDown={e => e.key === 'Enter' && handleSend()}
+             />
+             <button className="send-wa-btn" onClick={handleSend}>
+                {sending ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+             </button>
+          </footer>
+        </aside>
+      )}
     </div>
   );
 }
-
-const UsersIcon = ({ size, style }: any) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-  </svg>
-);
 
 export default App;
