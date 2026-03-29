@@ -93,14 +93,21 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: activeChat.whatsapp_id, text: inputText, customerId: activeChat.id })
       });
-      const data = await response.json();
+      
+      let data: any = {};
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = { error: 'O servidor retornou uma resposta inválida.' };
+      }
+
       if (!response.ok) {
-        setErrorStatus(data.details?.message || data.error || 'Falha ao enviar');
+        setErrorStatus(data.details?.message || data.error || `Erro de Servidor (${response.status})`);
       } else {
         setInputText('');
       }
     } catch (e: any) {
-      setErrorStatus(e.message || 'Erro de conexão');
+      setErrorStatus(e.message || 'Erro de conexão ou rede');
     } finally {
       setSending(false);
     }

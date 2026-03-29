@@ -18,12 +18,15 @@ const WHATSAPP_TOKEN = (process.env.VITE_WHATSAPP_TOKEN || "").trim();
 const PHONE_NUMBER_ID = (process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || "").trim();
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+  // Always respond with JSON to avoid "Unexpected end of JSON input" on frontend
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
 
   const { to, text, customerId } = req.body;
 
   if (!to || !text || !customerId) {
-    return res.status(400).json({ error: 'Missing parameters' });
+    return res.status(400).json({ error: 'Missing parameters (to, text, or customerId)' });
   }
 
   try {
@@ -45,15 +48,18 @@ export default async function handler(req: any, res: any) {
 
     const result = await response.json();
 
-    if (result.error) {
-      console.error('META_API_ERROR:', result.error);
-      return res.status(500).json({ error: 'Meta API Error', details: result.error });
+    if (!response.ok || result.error) {
+      console.error('META_API_ERROR:', result.error || result);
+      return res.status(response.status || 500).json({ 
+        error: 'Meta API Error', 
+        details: result.error || result 
+      });
     }
 
     // 2. Record it in the Interaction History of the CRM
     await addDoc(collection(db, 'interactions'), {
       customer_id: customerId,
-      interaction_type: 'agent_message', // To style it as 'Sent' in the UI
+      interaction_type: 'agent_message',
       content: text,
       created_at: serverTimestamp()
     });
