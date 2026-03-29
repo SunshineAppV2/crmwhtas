@@ -3,8 +3,6 @@ import {
   MessageSquare, 
   LayoutDashboard, 
   Settings, 
-  Search,
-  Plus,
   Smile,
   Paperclip,
   Mic,
@@ -37,6 +35,7 @@ interface Customer {
   lastMessage?: string;
   stage_id: string;
   ltv: number;
+  unread_count?: number;
 }
 
 const STAGES: Stage[] = [
@@ -56,7 +55,7 @@ function App() {
 
   // Load Customers
   useEffect(() => {
-    const q = query(collection(db, 'customers'), orderBy('created_at', 'desc'));
+    const q = query(collection(db, 'customers'), orderBy('updated_at', 'desc'));
     return onSnapshot(q, (sn) => {
       setCustomers(sn.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
@@ -65,7 +64,6 @@ function App() {
   // Load Messages for active chat
   useEffect(() => {
     if (!activeChat) return;
-    // We order by timestamp, but the query should be resilient to missing timestamps during write
     const q = query(
       collection(db, 'interactions'), 
       where('customer_id', '==', activeChat.id), 
@@ -74,10 +72,16 @@ function App() {
     );
     return onSnapshot(q, (sn) => {
       setMessages(sn.docs.map(d => ({ id: d.id, ...d.data() })));
-      // Scroll to bottom
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
   }, [activeChat]);
+
+  const selectChat = async (cust: Customer) => {
+    setActiveChat(cust);
+    if (cust.unread_count && cust.unread_count > 0) {
+      await updateDoc(doc(db, 'customers', cust.id), { unread_count: 0 });
+    }
+  };
 
   const moveCustomer = async (custId: string, newStageId: string) => {
     const customerRef = doc(db, 'customers', custId);
@@ -103,7 +107,7 @@ function App() {
 
   return (
     <div className="crm-app">
-      {/* 1. Icon Sidebar (Fiel ao print) */}
+      {/* 1. Icon Sidebar */}
       <nav className="icon-sidebar">
         <div className="sidebar-icon active"><MessageSquare size={24} /></div>
         <div className="sidebar-icon"><LayoutDashboard size={24} /></div>
@@ -111,7 +115,7 @@ function App() {
         <div className="sidebar-icon" style={{ marginTop: 'auto' }}><Settings size={24} /></div>
       </nav>
 
-      {/* 2. Chat-Kanban Area (As 4 colunas baseadas no print) */}
+      {/* 2. Chat-Kanban Area */}
       <main style={{ flex: 1, display: 'flex', overflowX: 'auto', background: '#F0F2F5', padding: '16px', gap: '8px' }}>
         {STAGES.map(stage => (
           <div 
@@ -132,7 +136,7 @@ function App() {
                   className={`chat-item-card ${activeChat?.id === c.id ? 'active' : ''}`}
                   draggable
                   onDragStartCapture={e => e.dataTransfer.setData('customerId', c.id)}
-                  onClick={() => setActiveChat(c)}
+                  onClick={() => selectChat(c)}
                 >
                   <div className="avatar-wa">{c.name.charAt(0)}</div>
                   <div className="chat-content-wa">
@@ -140,7 +144,12 @@ function App() {
                       <span className="chat-name-wa">{c.name}</span>
                       <span className="chat-time-wa">11:34</span>
                     </div>
-                    <div className="chat-msg-wa">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
+                    <div className="chat-msg-row">
+                      <div className="chat-msg-wa">{c.lastMessage || 'Ola, como posso ajudar?'}</div>
+                      {c.unread_count && c.unread_count > 0 ? (
+                        <div className="wa-unread-badge">{c.unread_count}</div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -149,7 +158,7 @@ function App() {
         ))}
       </main>
 
-      {/* 3. Floating Chat Window (Quando um card é selecionado) */}
+      {/* 3. Floating Chat Window */}
       {activeChat && (
         <aside className="floating-chat-window shadow-left">
           <header className="window-header-wa">
@@ -157,7 +166,7 @@ function App() {
                <div className="avatar-wa" style={{ width: '40px', height: '40px' }}>{activeChat.name.charAt(0)}</div>
                <div>
                   <div style={{ fontWeight: 600 }}>{activeChat.name}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--wa-text-secondary)' }}>visto recentemente às 11:34</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--wa-green-dark)' }}>Sincronizado via Whats</div>
                </div>
             </div>
             <button onClick={() => setActiveChat(null)} className="close-chat-btn">×</button>
@@ -166,7 +175,7 @@ function App() {
           <div className="chat-messages-wa">
              {messages.map((m, idx) => {
                const isMe = m.interaction_type === 'agent_message';
-               const showDate = idx === 0; // Simple date logic
+               const showDate = idx === 0;
                return (
                  <div key={m.id}>
                    {showDate && <div className="chat-date"><span>HOJE</span></div>}

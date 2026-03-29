@@ -4,6 +4,7 @@
   --wa-bg-nav: #F0F2F5;
   --wa-bg-hover: #F5F6F6;
   --wa-green: #00A884;
+  --wa-green-light: #25D366;
   --wa-text-primary: #111B21;
   --wa-text-secondary: #667781;
   --wa-border: #D1D7DB;
@@ -27,7 +28,7 @@ body {
   background: #F0F2F5;
 }
 
-/* 1. Icon Sidebar */
+/* Icons */
 .icon-sidebar {
   width: 60px;
   background: var(--wa-bg-nav);
@@ -49,7 +50,7 @@ body {
 
 .sidebar-icon.active { color: var(--wa-green); background: rgba(0,168,132,0.1); }
 
-/* 2. Hybrid Kanban Columns */
+/* Kanban Columns */
 .kanban-chat-column {
   min-width: 320px;
   max-width: 320px;
@@ -70,11 +71,10 @@ body {
   align-items: center;
   border-bottom: 1px solid var(--wa-border);
   font-size: 0.75rem;
-  letter-spacing: 1px;
 }
 
 .badge-wa {
-  background: var(--wa-green);
+  background: var(--wa-icon-gray);
   color: #fff;
   padding: 2px 8px;
   border-radius: 10px;
@@ -115,14 +115,33 @@ body {
 .chat-content-wa {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.chat-row-wa { display: flex; justify-content: space-between; align-items: center; }
+.chat-row-wa { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
 .chat-name-wa { font-weight: 500; font-size: 0.95rem; color: var(--wa-text-primary); }
 .chat-time-wa { font-size: 0.7rem; color: var(--wa-text-secondary); }
-.chat-msg-wa { font-size: 0.8rem; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
-/* 3. Floating Chat Window */
+.chat-msg-row { display: flex; justify-content: space-between; align-items: center; }
+.chat-msg-wa { font-size: 0.8rem; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 8px; }
+
+.wa-unread-badge {
+  background: #25D366;
+  color: #FFFFFF;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* Floating Chat Window */
 .floating-chat-window {
   width: 450px;
   background: var(--wa-bg-chat);
@@ -218,8 +237,3 @@ body {
 
 .chat-date { text-align: center; margin: 12px 0; }
 .chat-date span { background: #FFFFFF; color: var(--wa-text-secondary); padding: 4px 12px; border-radius: 8px; font-size: 0.75rem; box-shadow: 0 1px 0.5px rgba(0,0,0,0.1); }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }

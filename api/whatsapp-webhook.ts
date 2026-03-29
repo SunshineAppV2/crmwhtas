@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, query, where, getDocs, serverTimestamp, updateDoc, doc, increment } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: (process.env.VITE_FIREBASE_API_KEY || "").trim(),
@@ -18,13 +18,9 @@ const WHATSAPP_TOKEN = (process.env.VITE_WHATSAPP_TOKEN || "").trim();
 const PHONE_NUMBER_ID = (process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || "").trim();
 
 async function sendWhatsAppMessage(to: string, text: string) {
-  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
-    console.error('MISSING_WHATSAPP_CREDENTIALS');
-    return;
-  }
-
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) return;
   try {
-    const response = await fetch(`https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`, {
+    await fetch(`https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
@@ -35,13 +31,11 @@ async function sendWhatsAppMessage(to: string, text: string) {
         recipient_type: "individual",
         to: to.trim(),
         type: "text",
-        text: { body: text.normalize('NFKD') } // Remove potential weird characters
+        text: { body: text.normalize('NFKD') }
       })
     });
-    const result = await response.json();
-    console.log('WHATSAPP_SEND_RESULT:', result);
   } catch (err: any) {
-    console.error('ERROR_SENDING_WHATSAPP_FETCH:', err.message);
+    console.error('ERROR_SENDING:', err.message);
   }
 }
 
@@ -52,12 +46,8 @@ export default async function handler(req: any, res: any) {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-      return res.status(200).send(challenge);
-    } else {
-      return res.status(403).send('Forbidden');
-    }
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) return res.status(200).send(challenge);
+    return res.status(403).send('Forbidden');
   }
 
   if (req.method === 'POST') {
@@ -84,12 +74,20 @@ export default async function handler(req: any, res: any) {
             name: `User ${from}`,
             stage_id: '1',
             ltv: 0,
+            unread_count: 1, // Start with 1 for new lead
+            lastMessage: text,
             origin: 'WhatsApp Webhook',
             created_at: serverTimestamp()
           });
           customerId = newCustomer.id;
         } else {
           customerId = querySnapshot.docs[0].id;
+          // Increment unread count and update last message
+          await updateDoc(doc(db, 'customers', customerId), {
+            unread_count: increment(1),
+            lastMessage: text,
+            updated_at: serverTimestamp()
+          });
         }
 
         await addDoc(collection(db, 'interactions'), {
@@ -100,14 +98,12 @@ export default async function handler(req: any, res: any) {
         });
 
         if (isNew) {
-          // REMOVED EMOJI TO AVOID BYTE-STRING ENCODING ERRORS IN UNDICI
-          const welcomeText = `Ola! Seja bem-vindo ao nosso atendimento. Para agilizar o seu processo, por favor complete o seu cadastro no link abaixo: \n\n https://crm-web-whtas.vercel.app/cadastrar/${customerId}`;
+          const welcomeText = `Ola! Seja bem-vindo ao nosso atendimento. Para agilizar o seu processo, por favor complete o seu cadastro no link: \n\nhttps://crm-web-whtas.vercel.app/cadastrar/${customerId}`;
           await sendWhatsAppMessage(from, welcomeText);
         }
 
         return res.status(200).json({ status: 'success' });
       } catch (error) {
-        console.error('FIREBASE_CRITICAL_ERROR:', error);
         return res.status(500).json({ error: 'Internal Server Error' });
       }
     }
